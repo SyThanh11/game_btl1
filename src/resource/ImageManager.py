@@ -11,3 +11,4 @@ class ImageManager:
         self.game_over = pygame.image.load("Assets/images/GAME_OVER_SCREEN.png")
         self.volume_on = pygame.image.load("Assets/images/VOLUME_ON_ICON.png")
         self.volume_off = pygame.image.load("Assets/images/VOLUME_OFF_ICON.png")
+        

@@ -1,11 +1,14 @@
 import sys
 import pygame
 from const.const import CHAR_DELAY, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, TEXT
+from resource.SoundManager import SoundManager
 
 class IntroScene:
     def __init__(self, display, game_state_manager):
         self.display = display
         self.game_state_manager = game_state_manager
+        
+        self.sounds = SoundManager()
         
         # configurate time
         self.interval = 500 # time to display first letter
@@ -31,6 +34,7 @@ class IntroScene:
                 
         if any(pygame.key.get_pressed()) or any(pygame.mouse.get_pressed()):
             self.game_state_manager.setState('menu') # Change New State 'MENU'
+            self.sounds.playMainTrack()
             
         # take time since the game run
         self.current_time = pygame.time.get_ticks()
@@ -40,7 +44,8 @@ class IntroScene:
             self.char_index += 1
             self.next_char_time = self.current_time + self.char_delay
 
-
+            self.sounds.playTyping()
+            
         # output
         self.display.fill(BLACK)
         rendered_text = self.font.render(TEXT[:self.char_index], True, WHITE)
@@ -59,4 +64,6 @@ class IntroScene:
 
             # output
             self.display.blit(self.fade_surface, (0, 0))
+            
+            self.sounds.stopTyping()
             
