@@ -1,0 +1,20 @@
+# COLOR
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+DARK = (34, 9, 44)
+ORANGE = (240, 89, 65)
+RED = (184, 0, 0)
+GREY = (77, 63, 90)
+
+# SIZE SCREEN
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 800
+
+# TIME
+FPS = 60
+CHAR_DELAY = 100    
+
+# TEXT
+TEXT = "Smash The Zombie"
