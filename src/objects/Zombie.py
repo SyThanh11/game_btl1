@@ -21,10 +21,14 @@ class Zombie:
         self.time_last = MAX_TIME_LAST
         self.hit_time = 0
         self.go_down_time = 0
+        self.last_update_time = pygame.time.get_ticks()
 
     def change_state(self, new_state):  
         self.state = new_state
-
+        if new_state == ZombieState.GO_DOWN:
+            self.go_down_time = pygame.time.get_ticks()
+        elif new_state == ZombieState.IS_SLAMED:
+            self.hit_time = pygame.time.get_ticks()
 
     def draw(self):
         surface = pygame.Surface((ZOMBIE_WIDTH, ZOMBIE_HEIGHT))
@@ -69,13 +73,15 @@ class Zombie:
         self.alpha -= 51
 
     def need_go_down(self):
-        if self.time_last == 0:
-            self.time_last = MAX_TIME_LAST
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_update_time >= MAX_TIME_LAST:
+            self.last_update_time = current_time
             return True
-        self.time_last -= 1
+        return False
 
     def go_down(self):
         if self.y_rise == ZOMBIE_MAX_HEIGHT:
             self.state = ZombieState.NONE
             return
         self.y_rise += 10
+

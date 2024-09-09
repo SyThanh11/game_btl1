@@ -49,7 +49,7 @@ class MenuScene:
         self.display.blit(self.text_to_play, (116, 608))
 
         self.display.blit(self.text_quit, (31, 467))
-        self.display.blit(self.text_high_score, (580, 456))
+        self.display.blit(self.text_high_score, (550, 467))
 
         if (mouse_pos[0] >= 297) and (mouse_pos[0] <= 730) and (mouse_pos[1] >= 577) and (mouse_pos[1] <= 746):
             self.display.blit(self.image.play_game_button, (289, 564))

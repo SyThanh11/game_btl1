@@ -15,7 +15,7 @@ class Game:
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption(TEXT)
 
-        self.game_state_manager = GameStateManager('intro')
+        self.game_state_manager = GameStateManager('menu')
         
         self.intro = IntroScene(self.screen, self.game_state_manager)
         self.menu = MenuScene(self.screen, self.game_state_manager)
