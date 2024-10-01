@@ -1,92 +1,193 @@
 import pygame
+import pytweening
 import sys
-from resource.ImageManager import ImageManager
-from resource.SoundManager import SoundManager
-from const.const import SCREEN_HEIGHT, SCREEN_WIDTH, GREY, DARK, WHITE
+from enum import Enum
 
-class PauseScene:
-    def __init__(self, display, game_state_manager, game_play):
-        self.display = display
-        self.game_state_manager = game_state_manager
-        
-        self.image = ImageManager()
-        self.sound = SoundManager()
+from src.const.const import SCREEN_WIDTH
+from src.scenes.Scene import Scene
 
-        self.game_play = game_play
 
-        self.font_main = pygame.font.SysFont('jollylodger', 70)
-        self.font_sub = pygame.font.SysFont('jollylodger', 54)
+class PauseSceneState(Enum):
+    HIDDEN = 0
+    APPEARING = 1
+    STANDING = 2
+    DISAPPEARING_MENU = 3
+    DISAPPEARING_REPLAY = 4
 
-        self.game_over_center = self.image.game_over.get_rect().center
-        self.position = 0
-        self.transition_speed = 10
 
-        self.pause_game = self.font_main.render("P a u s e  g a m e", True, DARK)
-        self.pause_game_rect = self.pause_game.get_rect(
-                center=(SCREEN_WIDTH // 2, 280))
+class PauseScene (Scene):
+    def __init__(self):
+        super().__init__('pause')
 
-        self.continue_game = self.font_sub.render("C o n t i n u e", True, DARK)
-        self.continue_game_rect = self.continue_game.get_rect(center=(SCREEN_WIDTH // 2, 420))
+        self.background = None
+        self.ui_top = None
+        self.title_panel = None
+        self.volume_panel = None
+        self.control_panel = None
 
-        self.menu = self.font_sub.render("M e n u", True, GREY)
-        self.menu_rect = self.menu.get_rect(center = (SCREEN_WIDTH // 2, 580))
+        self.pause_text = None
+        self.hitted_num_text = None
 
-        self.volume_icon = self.image.volume_on
-        self.volume_icon_rect = self.volume_icon.get_rect(center = (SCREEN_WIDTH // 2, 645))
+        self.menu_button = None
+        self.replay_button = None
+        self.volume_button = None
 
-    def resetInitialState(self):
-        self.position = 0
+        self.pointer_pos = None
 
-    def run(self):
-        pygame.mouse.set_visible(True)  # make cursor invisible
+        self.appearing_interval = 600
+        self.disappearing_interval = 600
+        self.time_ratio = 1.0
 
-        mouse_pos = pygame.mouse.get_pos()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
-                    self.resetInitialState()
-                    self.game_state_manager.setState("game_play")
+        self.state = PauseSceneState.HIDDEN
 
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    if mouse_pos[0] >= 290 and mouse_pos[0] <= 510 and mouse_pos[1] >= 395 and mouse_pos[1] <= 445:
-                        self.game_state_manager.setState("game_play")
+    def create(self):
+        self.background = self.add_image("game-play-background")
+        self.ui_top = self.add_image("pause-ui-top")
+        self.title_panel = self.add_image("title")
+        self.volume_panel = self.add_image("result")
+        self.control_panel = self.add_image("result")
 
-                    if mouse_pos[0] >= 340 and mouse_pos[0] <= 460 and mouse_pos[1] >= 555 and mouse_pos[1] <= 605:
-                        self.game_play.resetInitialState()
-                        self.game_state_manager.setState("menu")
+        self.pause_text = self.add_text("PAUSE")
+        self.pause_text.set_is_bold(True)
+        self.hitted_num_text = self.add_text("HITTED NUMBER: " + str(self.manager.get_variable("result")),
+                                             font_size=30,
+                                             color="BLACK")
+        self.hitted_num_text.set_is_bold(True)
+        self.hitted_num_text.set_depth(100)
 
-                    if self.volume_icon_rect.collidepoint(mouse_pos):
-                        if self.volume_icon == self.image.volume_on:
-                            self.volume_icon = self.image.volume_off
-                            self.sound.stopMainTrack()
-                        else:
-                            self.volume_icon = self.image.volume_on
-                            self.sound.playMainTrack()
+        self.menu_button = self.add_image("menu-button")
+        self.replay_button = self.add_image("replay-button")
 
-        self.display.blit(self.image.game_play_background, (0, 0))
-        self.display.blit(self.image.game_over, (SCREEN_WIDTH // 2 -
-                    self.game_over_center[0], (SCREEN_HEIGHT - self.game_over_center[1]) - self.position))
+        self.title_panel.set_origin(0.5, 0.5)
+        self.title_panel.set_pos(SCREEN_WIDTH // 2, 60)
 
-        if (SCREEN_HEIGHT - self.game_over_center[1] - self.position) > ((SCREEN_HEIGHT // 2 - self.game_over_center[1]) + 50):
-            self.position += self.transition_speed
-        
+        self.pause_text.set_origin(0.5, 0.5)
+        self.pause_text.set_pos(SCREEN_WIDTH // 2, 70)
+        self.hitted_num_text.set_origin(0.5, 0.5)
+        self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, 335)
+
+        self.ui_top.set_origin(0.5, 0.5)
+        self.ui_top.set_pos(SCREEN_WIDTH // 2, 230)
+        self.ui_top.set_depth(11)
+
+        self.volume_panel.set_origin(0.5, 0.5)
+        self.volume_panel.set_pos(SCREEN_WIDTH // 2, 320)
+        self.volume_panel.set_depth(10)
+
+        self.control_panel.set_origin(0.5, 0.5)
+        self.control_panel.set_pos(SCREEN_WIDTH // 2, 445)
+
+        self.menu_button.set_origin(0.5, 0.5)
+        self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 460)
+        self.replay_button.set_origin(0.5, 0.5)
+        self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 460)
+
+        self.time_ratio = 1.0
+        self.set_state(PauseSceneState.APPEARING)
+
+    def set_state(self, state):
+        self.state = state
+
+    def proceed_time(self, time_interval, total_time):
+        if self.time_ratio < (time_interval / total_time):
+            self.time_ratio = 1.0
+            return False
         else:
-            self.display.blit(self.pause_game, self.pause_game_rect)
-            self.display.blit(self.continue_game, self.continue_game_rect)
-            self.display.blit(self.menu, self.menu_rect)
-            self.display.blit(self.volume_icon, self.volume_icon_rect)
+            self.time_ratio -= time_interval / total_time
+            return True
 
-            if mouse_pos[0] >= 290 and mouse_pos[0] <= 510 and mouse_pos[1] >= 395 and mouse_pos[1] <= 445:
-                self.continue_game = self.font_sub.render("C o n t i n u e", True, WHITE)
+    def update(self, time_interval):
+        if self.state == PauseSceneState.APPEARING:
+            if self.proceed_time(time_interval, self.appearing_interval):
+                ratio = pytweening.easeOutBack(1 - self.time_ratio)
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, 60 * ratio)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, 70 * ratio)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, 335 * ratio)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, 230 * ratio)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, 320 * ratio)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, 445 * ratio)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 460 * ratio)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 460 * ratio)
             else:
-                self.continue_game = self.font_sub.render("C o n t i n u e", True, DARK)
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, 60)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, 70)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, 335)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, 230)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, 320)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, 445)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 460)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 460)
+                self.set_state(PauseSceneState.STANDING)
+        elif self.state == PauseSceneState.STANDING:
+            pygame.mouse.set_visible(True)
+            self.pointer_pos = pygame.mouse.get_pos()
 
-            if mouse_pos[0] >= 340 and mouse_pos[0] <= 460 and mouse_pos[1] >= 555 and mouse_pos[1] <= 605:
-                self.menu = self.font_sub.render("M e n u", True, WHITE)
-            else: 
-                self.menu = self.font_sub.render("M e n u", True, GREY)
+            if self.menu_button.is_over(self.pointer_pos):
+                self.menu_button.set_texture(self.manager.image.get("menu-button-over"))
+            else:
+                self.menu_button.set_texture(self.manager.image.get("menu-button"))
+
+            if self.replay_button.is_over(self.pointer_pos):
+                self.replay_button.set_texture(self.manager.image.get("replay-button-over"))
+            else:
+                self.replay_button.set_texture(self.manager.image.get("replay-button"))
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if self.menu_button.is_over(self.pointer_pos):
+                            self.manager.sound.play("click")
+                            self.set_state(PauseSceneState.DISAPPEARING_MENU)
+                        elif self.replay_button.is_over(self.pointer_pos):
+                            self.manager.sound.play("click")
+                            self.set_state(PauseSceneState.DISAPPEARING_REPLAY)
+        elif self.state == PauseSceneState.DISAPPEARING_MENU:
+            if self.proceed_time(time_interval, self.disappearing_interval):
+                self.set_alpha(255 * self.time_ratio)
+                ratio = pytweening.easeInBack(self.time_ratio)
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, 160 * ratio - 100)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, 170 * ratio - 100)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, 435 * ratio - 100)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, 330 * ratio - 100)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, 420 * ratio - 100)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, 545 * ratio - 100)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 560 * ratio - 100)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 560 * ratio - 100)
+            else:
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, -100)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, -100)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, -100)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, -100)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, -100)
+                self.set_state(PauseSceneState.HIDDEN)
+                self.manager.start("menu")
+        elif self.state == PauseSceneState.DISAPPEARING_REPLAY:
+            if self.proceed_time(time_interval, self.disappearing_interval):
+                ratio = pytweening.easeInBack(self.time_ratio)
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, 160 * ratio - 100)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, 170 * ratio - 100)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, 435 * ratio - 100)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, 330 * ratio - 100)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, 420 * ratio - 100)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, 545 * ratio - 100)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 560 * ratio - 100)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 560 * ratio - 100)
+            else:
+                self.title_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.pause_text.set_pos(SCREEN_WIDTH // 2, -100)
+                self.hitted_num_text.set_pos(SCREEN_WIDTH // 2, -100)
+                self.ui_top.set_pos(SCREEN_WIDTH // 2, -100)
+                self.volume_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, -100)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, -100)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, -100)
+                self.set_state(PauseSceneState.HIDDEN)
+                self.manager.stop("pause")
+                self.manager.resume("game-play")

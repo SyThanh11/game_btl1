@@ -1,175 +1,178 @@
 import pygame
-import math
 import random
 import sys
-from resource.ImageManager import ImageManager
-from resource.SoundManager import SoundManager
-from objects.Zombie import ZombieState, Zombie
-from const.const import DELAY_BEFORE_REMOVAL, WHITE, SCREEN_WIDTH
+from src.objects.Zombie import ZombieState, Zombie
+from src.scenes.Scene import Scene
+from src.const.const import COUNT_DOWN, ZOMBIE_GENERATING_INTERVAL
 
-class GamePlayScene:
 
-    def __init__(self, display, game_state_manager):
-        self.display = display  # similar to screen variable
-        self.game_state_manager = game_state_manager
-        
-        self.image = ImageManager()
-        self.sounds = SoundManager()
+class GamePlayScene (Scene):
+    def __init__(self):
+        super().__init__('game-play')
+        self.image = None
+        self.sounds = None
+        self.timer_countdown = None
+        self.countdown_event = None
+        self.zombie_generating_event = None
 
-        self.TIMER = 20  # game play duration
-        self.timer_countdown = self.TIMER
+        self.grid_topleft_pos = None
+        self.grid_width = None
+        self.grid_height = None
 
-        self.NUM_ROW = 3
-        self.NUM_COL = 3
+        self.grave_grid = None
+        self.zombie_grid = None
 
-        self.setting_icon = pygame.transform.scale(
-            self.image.setting_icon, (35, 37))
-        self.setting_icon_rect = self.setting_icon.get_rect(center =(35, 35))
+        self.back_ground = None
+        self.mallet = None
+        self.setting_button_background = None
+        self.setting_button = None
 
-        self.cursor_img = self.image.sword
-        self.cursor_img_rect = self.cursor_img.get_rect()
+        self.info_panel = None
+        self.hitted_num_text = None
+        self.missed_num_text = None
+        self.time_left_text = None
 
-        self.font_main = pygame.font.SysFont('trashhand', 70)
-        self.font_sub = pygame.font.SysFont('trashhand', 40)
+        self.grave_pos_lst = None
 
-        self.score_value = 0
-        self.nb_of_click = 0
+        self.total_hitted = 0
 
-        self.zombies = []  # init a list to store current zombies on the screen
+        self.pointer_pos = None
 
-        self.ZOMBIE_LIFE_SPANS = 1 * 1000
-        self.ZOMBIE_RADIUS = max(self.image.zombie.get_width(), self.image.zombie.get_height()) * 0.4
-        self.GENERATE_ZOMBIE = pygame.USEREVENT + 1
-        self.APPEAR_INTERVAL = 2 * 1000
+    def create(self):
+        self.timer_countdown = COUNT_DOWN
 
-        self.zombies_position = [(142, 125), (405, 125), (659, 125), (142, 372), (405, 372), (
-            659, 372), (142, 620), (405, 620), (659, 620)]  # init a list to store position of zombie
+        self.total_hitted = 0
+        self.manager.set_variable("missed", 0)
 
-        pygame.time.set_timer(self.GENERATE_ZOMBIE, self.APPEAR_INTERVAL)
-        pygame.time.set_timer(pygame.USEREVENT, 1000)
+        self.countdown_event = pygame.USEREVENT
+        self.zombie_generating_event = pygame.USEREVENT + 1
 
-    def resetInitialState(self):
-        self.timer_countdown = self.TIMER
-        self.nb_of_click = 0
-        self.score_value = 0
+        pygame.time.set_timer(self.zombie_generating_event, ZOMBIE_GENERATING_INTERVAL)
+        pygame.time.set_timer(self.countdown_event, 1000)
 
-    def getScore(self):
-        return self.score_value
-    
-    def getMissedClick(self):
-        return self.nb_of_click - self.score_value
+        self.grid_topleft_pos = (270, 200)
+        self.grid_width = 86
+        self.grid_height = 100
 
-    def checkExist(self, pos):
-        for zombie in self.zombies:
-            if pos == (zombie.x, zombie.y):
-                return True
-        return False
+        self.back_ground = self.add_image("game-play-background")
 
-    def generateNextEnemyPos(self):
-        new_pos = ()  # init an empty tuple
-        while True:
-            # random a number from 0 to 8
-            grid_index = random.randint(0, self.NUM_ROW * self.NUM_COL - 1)
-            new_pos = self.zombies_position[grid_index]
-            if not self.checkExist(new_pos):
-                break
-        # return position that able to generate new zombie and time
-        return new_pos, pygame.time.get_ticks()
+        self.grave_grid = []
+        for i in range(5):
+            grave_lst = []
+            for j in range(9):
+                grave = self.add_image("grave")
+                grave.set_pos(self.grid_topleft_pos[0] + self.grid_width * j,
+                              self.grid_topleft_pos[1] + self.grid_height * i)
+                grave.set_active(False)
+                self.add(grave)
+                grave_lst.append(grave)
+            self.grave_grid.append(grave_lst)
 
-    def drawZombies(self):
-        for zombie in self.zombies:
-            zombie.draw()
+        self.zombie_grid = []
+        for i in range(5):
+            zombie_lst = []
+            for j in range(9):
+                zombie = Zombie(self)
+                zombie.set_pos(self.grid_topleft_pos[0] + self.grid_width * j + 30,
+                               self.grid_topleft_pos[1] + self.grid_height * i + 51)
+                zombie.set_origin(0.5, 0.5)
+                zombie.set_state(ZombieState.HIDDEN)
+                self.add(zombie)
+                zombie_lst.append(zombie)
+            self.zombie_grid.append(zombie_lst)
 
-    def checkCollision(self, clickX, clickY, enemyX, enemyY):
-        zombie_rect = self.image.zombie.get_rect()
-        enemy_center = (
-            enemyX + zombie_rect.center[0] - 20, enemyY + zombie_rect.center[1] - 50)
-        distance = math.sqrt(math.pow(
-            enemy_center[0] - clickX, 2) + (math.pow(enemy_center[1] - clickY, 2)))
-        return distance < self.ZOMBIE_RADIUS
+        self.mallet = self.add_image("mallet")
+        self.mallet.set_origin(0.5, 0.5)
+        self.mallet.set_depth(200)
+        self.add(self.mallet)
 
-    def checkZombiesCollision(self, click_pos):
-        current_time = pygame.time.get_ticks()
-        for zombie in self.zombies:
-            if self.checkCollision(click_pos[0], click_pos[1], zombie.x, zombie.y) and zombie.state == ZombieState.GO_UP:
-                self.score_value += 1
-                zombie.change_state(ZombieState.IS_SLAMED)
-                self.sounds.playLevelUp()
-                zombie.draw()
-                zombie.hit_time = current_time
-            
-    def removePreviousZombie(self):
-        for zombie in self.zombies:
-            current_time = pygame.time.get_ticks()
-            if zombie.need_go_down():
-                zombie.change_state(ZombieState.GO_DOWN)
-                zombie.draw()
-                zombie.go_down_time = current_time
-            if current_time - zombie.go_down_time >= DELAY_BEFORE_REMOVAL and zombie.state == ZombieState.NONE:
-                self.zombies.remove(zombie)
-            if current_time - zombie.hit_time >= DELAY_BEFORE_REMOVAL and zombie.state == ZombieState.IS_SLAMED:
-                self.zombies.remove(zombie)
+        self.setting_button_background = self.add_image("setting-button-background", 45, 45)
+        self.setting_button = self.add_image("setting-button", 63, 64)
 
-    def displayMissedClicks(self):
-        missed_clicks = self.font_sub.render(
-            "M i s s e d :  " + str(self.nb_of_click - self.score_value), True, WHITE)
-        text_rect = missed_clicks.get_rect(center=(120, 775))
-        self.display.blit(missed_clicks, text_rect)
+        self.info_panel = self.add_image("button-over", 720, 10)
+        self.info_panel.set_scale(1.5, 1.3)
+        self.hitted_num_text = self.add_text("HITTED NUMBER: " + str(self.total_hitted),
+                                             745, 30,
+                                             font_size=30,
+                                             color="BLACK")
+        self.hitted_num_text.set_is_bold(True)
+        self.missed_num_text = self.add_text("MISSED NUMBER: " + str(self.manager.get_variable("missed")),
+                                             745, 72,
+                                             font_size=30,
+                                             color="BLACK")
+        self.missed_num_text.set_is_bold(True)
+        self.time_left_text = self.add_text("TIME LEFT: " + str(self.timer_countdown),
+                                            745, 114,
+                                            font_size=30,
+                                            color="RED")
+        self.time_left_text.set_is_bold(True)
 
-    def displayScore(self):
-        score = self.font_sub.render(
-            "S c o r e :  " + str(self.score_value), True, WHITE)
-        text_rect = score.get_rect(center=(SCREEN_WIDTH // 2, 775))
-        self.display.blit(score, text_rect)
+        pos_lst = []
+        for i in range(45):
+            pos_lst.append((i // 9, i % 9))
+        random.shuffle(pos_lst)
+        self.grave_pos_lst = pos_lst[:10]
+        for pos in self.grave_pos_lst:
+            self.grave_grid[pos[0]][pos[1]].set_active(True)
 
-    def displayTime(self):
-        time = self.font_sub.render(
-            "T i m e :  " + str(self.timer_countdown), True, WHITE)
-        text_rect = time.get_rect(center=(680, 775))
-        self.display.blit(time, text_rect)
+    def check_zombies_collision(self):
+        for pos in self.grave_pos_lst:
+            zombie = self.zombie_grid[pos[0]][pos[1]]
+            if zombie.is_over(self.pointer_pos) and zombie.state == ZombieState.STANDING:
+                zombie.set_state(ZombieState.SLAMED)
+                self.total_hitted += 1
+                self.manager.set_variable("result", self.total_hitted)
+                self.manager.sound.play("point")
 
-    def run(self):
+    def update(self, time_interval):
+        self.pointer_pos = pygame.mouse.get_pos()
+        self.hitted_num_text.set_content("HITTED NUMBER: " + str(self.total_hitted))
+        self.missed_num_text.set_content("MISSED NUMBER: " + str(self.manager.get_variable("missed")))
+        self.time_left_text.set_content("TIME LEFT: " + str(self.timer_countdown))
+
+        if self.setting_button.is_over(self.pointer_pos):
+            pygame.mouse.set_visible(True)
+            self.mallet.set_active(False)
+            self.setting_button.set_alpha(200)
+        else:
+            pygame.mouse.set_visible(False)
+            self.mallet.set_active(True)
+            self.mallet.set_pos(self.pointer_pos[0],
+                                self.pointer_pos[1])
+            self.setting_button.set_alpha(255)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN:
+                self.mallet.set_texture(self.manager.image.get("mallet-smash"))
                 if event.button == 1:
-                    click_pos = pygame.mouse.get_pos()
-                    if self.setting_icon_rect.collidepoint(click_pos):
-                        self.game_state_manager.setState('pause')
+                    if self.setting_button.is_over(self.pointer_pos):
+                        self.manager.sound.play("click")
+                        self.manager.launch("pause")
+                        self.manager.pause("game-play")
                     else:
-                        self.nb_of_click += 1
-                        self.checkZombiesCollision(click_pos)
+                        self.check_zombies_collision()
 
-            if event.type == self.GENERATE_ZOMBIE:
-                self.removePreviousZombie()
-                if len(self.zombies) < self.NUM_COL * self.NUM_ROW:
-                    new_pos, time_of_birth = self.generateNextEnemyPos()
-                    self.zombies.append(
-                        Zombie(x=new_pos[0], y=new_pos[1], screen=self.display))
+            if event.type == pygame.MOUSEBUTTONUP:
+                self.mallet.set_texture(self.manager.image.get("mallet"))
 
-            if event.type == pygame.USEREVENT:
+            if event.type == self.zombie_generating_event:
+                random.shuffle(self.grave_pos_lst)
+                for pos in self.grave_pos_lst:
+                    if not self.zombie_grid[pos[0]][pos[1]].get_active():
+                        self.zombie_grid[pos[0]][pos[1]].set_state(ZombieState.APPEARING)
+                        break
+
+            if event.type == self.countdown_event:
                 self.timer_countdown -= 1
                 if self.timer_countdown <= 0:
-                    self.zombies.clear()
-                    self.game_state_manager.setState('game_over')
+                    if self.total_hitted > self.manager.get_variable("record"):
+                        self.manager.set_variable("record", self.total_hitted)
+                    self.manager.start('game-over')
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:
-                    self.game_state_manager.setState('pause')  
-
-        self.display.blit(self.image.game_play_background, (0, 0))
-
-        self.display.blit(self.setting_icon, self.setting_icon_rect)
-
-        self.drawZombies()
-        self.displayMissedClicks()
-        self.displayScore()
-        self.displayTime()
-
-        # cursor customize
-        pygame.mouse.set_visible(False)  # make cursor invisible
-        self.cursor_img_rect.center = pygame.mouse.get_pos()
-        self.display.blit(self.cursor_img, self.cursor_img_rect)
+                    self.manager.start('pause')

@@ -1,91 +1,214 @@
 import pygame
+import pytweening
 import sys
-from resource.ImageManager import ImageManager  
-from const.const import DARK, GREY, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from enum import Enum
+from src.const.const import SCREEN_WIDTH, SCREEN_HEIGHT
+from src.scenes.Scene import Scene
 
-class GameOverScene:
-    def __init__(self, display, game_state_manager, game_play):
-        self.display = display  # similar to screen variable
-        self.game_state_manager = game_state_manager
-        self.game_play = game_play
 
-        self.image = ImageManager()
+class GameOverSceneState(Enum):
+    HIDDEN = 0
+    APPEARING = 1
+    STANDING = 2
+    DISAPPEARING_MENU = 3
+    DISAPPEARING_REPLAY = 4
 
-        self.font_main = pygame.font.SysFont('jollylodger', 70)
-        self.font_sub = pygame.font.SysFont('jollylodger', 54)
 
-        self.game_over_center = self.image.game_over.get_rect().center
-        self.position = 0
-        self.transition_speed = 10
+class GameOverScene (Scene):
+    def __init__(self):
+        super().__init__('game-over')
 
-        self.new_record = self.font_main.render(
-            "N e w  r e c o r d", True, DARK)
-        self.game_over = self.font_main.render("G a m e  O v e r", True, DARK)
-        self.play_again = self.font_sub.render(
-            "P l a y  A g a i n", True, GREY)
-        self.menu = self.font_sub.render("M e n u", True, GREY)
+        self.background = None
+        self.title = None
+        self.record = None
+        self.result = None
+        self.info_panel = None
+        self.control_panel = None
 
-    def resetInitialState(self):
-        self.position = 0
+        self.game_over_text = None
+        self.record_text = None
+        self.record_number = None
+        self.result_text = None
+        self.result_number = None
 
-    def run(self):
-        pygame.mouse.set_visible(True)  # make cursor invisible
-        mouse_pos = pygame.mouse.get_pos()
+        self.menu_button = None
+        self.replay_button = None
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: 
-                    if (mouse_pos[0] >= 240) and (mouse_pos[0] <= 560) and (mouse_pos[1] >= 550) and (mouse_pos[1] <= 610):
-                        self.game_play.resetInitialState()
-                        self.resetInitialState()
-                        self.game_state_manager.setState('game_play')
+        self.pointer_pos = None
 
-                    if (mouse_pos[0] >= 345) and (mouse_pos[0] <= 465) and (mouse_pos[1] >= 620) and (mouse_pos[1] <= 670):
-                        self.game_play.resetInitialState()
-                        self.resetInitialState()
-                        self.game_state_manager.setState('menu')
+        self.appearing_interval = 600
+        self.disappearing_interval = 800
+        self.time_ratio = 1.0
 
-        self.display.blit(self.image.game_play_background, (0, 0))
-        self.display.blit(self.image.game_over, (SCREEN_WIDTH // 2 -
-                          self.game_over_center[0], (SCREEN_HEIGHT - self.game_over_center[1]) - self.position))
+        self.state = GameOverSceneState.HIDDEN
 
-        # transition effect continue to increase position every time
-        if (SCREEN_HEIGHT - self.game_over_center[1] - self.position) > ((SCREEN_HEIGHT // 2 - self.game_over_center[1]) + 50):
-            self.position += self.transition_speed
+    def create(self):
+        self.background = self.add_image("game-play-background")
+        self.title = self.add_image("title")
+        self.info_panel = self.add_image("info")
+        self.control_panel = self.add_image("result")
 
+        self.game_over_text = self.add_text("GAME OVER")
+        self.game_over_text.set_is_bold(True)
+        self.record_text = self.add_text("RECORD")
+        self.record_text.set_is_bold(True)
+        self.record_number = self.add_text(str(self.manager.get_variable("record")))
+        self.record_number.set_is_bold(True)
+        self.result_text = self.add_text("RESULT")
+        self.result_text.set_is_bold(True)
+        self.result_number = self.add_text(str(self.manager.get_variable("result")))
+        self.result_number.set_is_bold(True)
+
+        self.menu_button = self.add_image("menu-button")
+        self.replay_button = self.add_image("replay-button")
+
+        self.title.set_origin(0.5, 0.5)
+        self.title.set_pos(SCREEN_WIDTH // 2, 60)
+
+        self.game_over_text.set_origin(0.5, 0.5)
+        self.game_over_text.set_pos(SCREEN_WIDTH // 2, 70)
+
+        self.info_panel.set_origin(0.5, 0.5)
+        self.info_panel.set_pos(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        self.info_panel.set_depth(10)
+
+        self.record_text.set_pos(200, 300)
+        self.record_text.set_depth(11)
+        self.record_number.set_color("YELLOW")
+        self.record_number.set_pos(450, 300)
+        self.record_number.set_depth(11)
+
+        self.result_text.set_pos(200, 400)
+        self.result_text.set_depth(11)
+        self.result_number.set_color("YELLOW")
+        self.result_number.set_pos(450, 400)
+        self.result_number.set_depth(11)
+
+        self.control_panel.set_origin(0.5, 0.5)
+        self.control_panel.set_pos(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 190)
+
+        self.menu_button.set_origin(0.5, 0.5)
+        self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 605)
+        self.replay_button.set_origin(0.5, 0.5)
+        self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 605)
+
+        self.time_ratio = 1.0
+        self.set_state(GameOverSceneState.APPEARING)
+
+    def set_state(self, state):
+        self.state = state
+
+    def proceed_time(self, time_interval, total_time):
+        if self.time_ratio < (time_interval / total_time):
+            self.time_ratio = 1.0
+            return False
         else:
-            new_record_rect = self.new_record.get_rect(
-                center=(SCREEN_WIDTH // 2, 280))
-            self.display.blit(self.new_record, new_record_rect)
+            self.time_ratio -= time_interval / total_time
+            return True
 
-            self.score = self.font_sub.render(
-                "S c o r e :  " + str(self.game_play.getScore()), True, DARK)
-            score_rect = self.score.get_rect(center=(SCREEN_WIDTH // 2, 390))
-            self.display.blit(self.score, score_rect)
-
-            self.missed_clicks = self.font_sub.render(
-                "M i s s e d :  " + str(self.game_play.getMissedClick()), True, DARK)
-            missed_clicks_rect = self.missed_clicks.get_rect(center=(SCREEN_WIDTH // 2, 450))
-            self.display.blit(self.missed_clicks, missed_clicks_rect)
-
-            play_again_rect = self.play_again.get_rect(
-                center=(SCREEN_WIDTH // 2, 580))
-            self.display.blit(self.play_again, play_again_rect)
-
-            menu_rect = self.menu.get_rect(center=(SCREEN_WIDTH // 2, 645))
-            self.display.blit(self.menu, menu_rect)
-
-            if (mouse_pos[0] >= 240) and (mouse_pos[0] <= 560) and (mouse_pos[1] >= 550) and (mouse_pos[1] <= 610):
-                self.play_again = self.font_sub.render(
-                    "P l a y  A g a i n", True, WHITE)
+    def update(self, time_interval):
+        if self.state == GameOverSceneState.APPEARING:
+            if self.proceed_time(time_interval, self.appearing_interval):
+                ratio = pytweening.easeOutBack(1 - self.time_ratio)
+                self.title.set_pos(SCREEN_WIDTH // 2, 60 * ratio)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, 70 * ratio)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2) * ratio)
+                self.record_text.set_pos(200, 300 * ratio)
+                self.record_number.set_pos(450, 300 * ratio)
+                self.result_text.set_pos(200, 400 * ratio)
+                self.result_number.set_pos(450, 400 * ratio)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2 + 190) * ratio)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 605 * ratio)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 605 * ratio)
             else:
-                self.play_again = self.font_sub.render(
-                    "P l a y  A g a i n", True, GREY)
+                self.title.set_pos(SCREEN_WIDTH // 2, 60)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, 70)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+                self.record_text.set_pos(200, 300)
+                self.record_number.set_pos(450, 300)
+                self.result_text.set_pos(200, 400)
+                self.result_number.set_pos(450, 400)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 190)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 605)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 605)
+                self.set_state(GameOverSceneState.STANDING)
+        elif self.state == GameOverSceneState.STANDING:
+            pygame.mouse.set_visible(True)
+            self.pointer_pos = pygame.mouse.get_pos()
 
-            if (mouse_pos[0] >= 345) and (mouse_pos[0] <= 465) and (mouse_pos[1] >= 620) and (mouse_pos[1] <= 670):
-                self.menu = self.font_sub.render("M e n u", True, WHITE)
+            if self.menu_button.is_over(self.pointer_pos):
+                self.menu_button.set_texture(self.manager.image.get("menu-button-over"))
             else:
-                self.menu = self.font_sub.render("M e n u", True, GREY)
+                self.menu_button.set_texture(self.manager.image.get("menu-button"))
+
+            if self.replay_button.is_over(self.pointer_pos):
+                self.replay_button.set_texture(self.manager.image.get("replay-button-over"))
+            else:
+                self.replay_button.set_texture(self.manager.image.get("replay-button"))
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if self.menu_button.is_over(self.pointer_pos):
+                            self.manager.sound.play("click")
+                            self.set_state(GameOverSceneState.DISAPPEARING_MENU)
+                        elif self.replay_button.is_over(self.pointer_pos):
+                            self.manager.sound.play("click")
+                            self.set_state(GameOverSceneState.DISAPPEARING_REPLAY)
+        elif self.state == GameOverSceneState.DISAPPEARING_MENU:
+            if self.proceed_time(time_interval, self.disappearing_interval):
+                self.set_alpha(255 * self.time_ratio)
+                ratio = pytweening.easeInBack(self.time_ratio)
+                self.title.set_pos(SCREEN_WIDTH // 2, 260 * ratio - 200)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, 270 * ratio - 200)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2 + 200) * ratio - 200)
+                self.record_text.set_pos(200, 500 * ratio - 200)
+                self.record_number.set_pos(450, 500 * ratio - 200)
+                self.result_text.set_pos(200, 600 * ratio - 200)
+                self.result_number.set_pos(450, 600 * ratio - 200)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2 + 390) * ratio - 200)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 805 * ratio - 200)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 805 * ratio - 200)
+            else:
+                self.title.set_pos(SCREEN_WIDTH // 2, -200)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, -200)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, -200)
+                self.record_text.set_pos(200, -200)
+                self.record_number.set_pos(450, -200)
+                self.result_text.set_pos(200, -200)
+                self.result_number.set_pos(450, -200)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, -200)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, -200)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, -200)
+                self.set_state(GameOverSceneState.HIDDEN)
+                self.manager.start("menu")
+        elif self.state == GameOverSceneState.DISAPPEARING_REPLAY:
+            if self.proceed_time(time_interval, self.disappearing_interval):
+                ratio = pytweening.easeInBack(self.time_ratio)
+                self.title.set_pos(SCREEN_WIDTH // 2, 260 * ratio - 200)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, 270 * ratio - 200)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2 + 200) * ratio - 200)
+                self.record_text.set_pos(200, 500 * ratio - 200)
+                self.record_number.set_pos(450, 500 * ratio - 200)
+                self.result_text.set_pos(200, 600 * ratio - 200)
+                self.result_number.set_pos(450, 600 * ratio - 200)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 2 + 390) * ratio - 200)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, 805 * ratio - 200)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, 805 * ratio - 200)
+            else:
+                self.title.set_pos(SCREEN_WIDTH // 2, -200)
+                self.game_over_text.set_pos(SCREEN_WIDTH // 2, -200)
+                self.info_panel.set_pos(SCREEN_WIDTH // 2, -200)
+                self.record_text.set_pos(200, -200)
+                self.record_number.set_pos(450, -200)
+                self.result_text.set_pos(200, -200)
+                self.result_number.set_pos(450, -200)
+                self.control_panel.set_pos(SCREEN_WIDTH // 2, -200)
+                self.menu_button.set_pos(SCREEN_WIDTH // 2 - 55, -200)
+                self.replay_button.set_pos(SCREEN_WIDTH // 2 + 55, -200)
+                self.set_state(GameOverSceneState.HIDDEN)
+                self.manager.start("game-play")
